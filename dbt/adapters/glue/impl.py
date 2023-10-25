@@ -904,7 +904,8 @@ outputDf = inputDf.drop("dbt_unique_key").withColumn("update_iceberg_ts",current
         # Use standard table instead of temp view to workaround https://github.com/apache/iceberg/issues/7766
         if session.credentials.glue_version == "4.0":
             head_code += f'''outputDf.createOrReplaceTempView("tmp_tmp_{target_relation.name}")
-spark.sql("CREATE OR REPLACE TABLE tmp_{target_relation.name} LOCATION '{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}' AS SELECT * FROM tmp_tmp_{target_relation.name}")
+spark.sql("DROP TABLE if exists tmp_{target_relation.name}")
+spark.sql("CREATE TABLE tmp_{target_relation.name} LOCATION '{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}' AS SELECT * FROM tmp_tmp_{target_relation.name}")
 '''
         else:
             head_code += f'outputDf.createOrReplaceTempView("tmp_{target_relation.name}")'
