@@ -905,6 +905,8 @@ outputDf = inputDf.drop("dbt_unique_key").withColumn("update_iceberg_ts",current
         if session.credentials.glue_version == "4.0":
             head_code += f'''outputDf.createOrReplaceTempView("tmp_tmp_{target_relation.name}")
 spark.sql("DROP TABLE if exists tmp_{target_relation.name}")
+from awsglue.context import GlueContext
+GlueContext(spark.sparkContext).purge_s3_path("{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}", {"retentionPeriod": 0})
 spark.sql("CREATE TABLE tmp_{target_relation.name} LOCATION '{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}' AS SELECT * FROM tmp_tmp_{target_relation.name}")
 '''
         else:
