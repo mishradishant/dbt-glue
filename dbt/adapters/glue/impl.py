@@ -307,6 +307,16 @@ class GlueAdapter(SQLAdapter):
         return f"LOCATION '{session.credentials.location}/{relation.schema}/{relation.name}/'"
 
     @available
+    def get_iceberg_custom_location(self,custom_location, relation: BaseRelation):
+        """
+        Helper method to deal with issues due to trailing / in Iceberg location.
+        The method ensure that no final slash is in the location.
+        """
+        session, client = self.get_connection()
+        s3_path = os.path.join(custom_location, relation.schema, relation.name)
+        return f"LOCATION '{s3_path}'"
+    
+    @available
     def get_iceberg_location(self, relation: BaseRelation):
         """
         Helper method to deal with issues due to trailing / in Iceberg location.
@@ -561,7 +571,7 @@ SqlWrapper2.execute("""select * from {model["schema"]}.{model["name"]} limit 1""
         if custom_location == "empty":
             location = f"{session.credentials.location}/{target_relation.schema}/{target_relation.name}"
         else:
-            location = custom_location
+            location = f"{custom_location}/{target_relation.schema}/{target_relation.name}"
 
         if {session.credentials.delta_athena_prefix} is not None:
             run_msck_repair = f'''
@@ -595,7 +605,7 @@ SqlWrapper2.execute("""select * from {model["schema"]}.{model["name"]} limit 1""
         if custom_location == "empty":
             location = f"{session.credentials.location}/{target_relation.schema}/{target_relation.name}"
         else:
-            location = custom_location
+            location = f"{custom_location}/{target_relation.schema}/{target_relation.name}"
 
         create_table_query = f"""
 CREATE TABLE {table_name}
@@ -698,7 +708,7 @@ SqlWrapper2.execute("""select 1""")
         if custom_location == "empty":
             return f'''outputDf.write.format('org.apache.hudi').options(**combinedConf).mode('{write_mode}').save("{session.credentials.location}/{target_relation.schema}/{target_relation.name}/")'''
         else:
-            return f'''outputDf.write.format('org.apache.hudi').options(**combinedConf).mode('{write_mode}').save("{custom_location}/")'''
+            return f'''outputDf.write.format('org.apache.hudi').options(**combinedConf).mode('{write_mode}').save("{custom_location}/{target_relation.schema}/{target_relation.name}/")'''
 
     @available
     def hudi_merge_table(self, target_relation, request, primary_key, partition_key, custom_location, hudi_config, substitute_variables):
@@ -872,7 +882,7 @@ SqlWrapper2.execute("""SELECT * FROM {target_relation.schema}.{target_relation.n
         if custom_location == "empty":
             location = f"{session.credentials.location}/{target_relation.schema}/{target_relation.name}"
         else:
-            location = custom_location
+            location = f"{custom_location}/{target_relation.schema}/{target_relation.name}"
         isTableExists = False
         if self.check_relation_exists(target_relation):
             isTableExists = True

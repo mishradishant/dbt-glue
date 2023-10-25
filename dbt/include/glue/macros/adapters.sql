@@ -4,7 +4,7 @@
   {%- set materialized = config.get('materialized') -%}
 
   {%- if custom_location is not none %}
-    location '{{ custom_location }}'
+    {{ adapter.get_iceberg_custom_location(custom_location, relation) }}
   {%- else -%}
     {% if file_format == 'iceberg' %}
       {{ adapter.get_iceberg_location(relation) }}
@@ -65,7 +65,7 @@
   {% if temporary -%}
     {{ create_temporary_view(relation, sql) }}
   {%- else -%}
-    	create table {{ relation }}
+    	create table glue_catalog.{{ relation }}
   {{ glue__file_format_clause() }}
 	{{ partition_cols(label="partitioned by") }}
 	{{ clustered_cols(label="clustered by") }}
