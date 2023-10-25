@@ -901,12 +901,16 @@ spark = SparkSession.builder \\
 inputDf = spark.sql("""{request}""")
 outputDf = inputDf.drop("dbt_unique_key").withColumn("update_iceberg_ts",current_timestamp())
 '''
+        if session.credentials.glue_version == "4.0": # Clean up the table used for the workaround
+            cleanup_code = f'''spark.sql("DROP TABLE IF EXISTS tmp_{target_relation.name}")
+from awsglue.context import GlueContext
+GlueContext(spark.sparkContext).purge_s3_path("{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}"'''
+            cleanup_code += ', {"retentionPeriod": 0})'
+
         # Use standard table instead of temp view to workaround https://github.com/apache/iceberg/issues/7766
         if session.credentials.glue_version == "4.0":
-            head_code += f'''outputDf.createOrReplaceTempView("tmp_tmp_{target_relation.name}")
-spark.sql("DROP TABLE if exists tmp_{target_relation.name}")
-from awsglue.context import GlueContext
-GlueContext(spark.sparkContext).purge_s3_path("{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}", {"retentionPeriod": 0})
+            head_code += cleanup_code + f'''
+outputDf.createOrReplaceTempView("tmp_tmp_{target_relation.name}")
 spark.sql("CREATE TABLE tmp_{target_relation.name} LOCATION '{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}' AS SELECT * FROM tmp_tmp_{target_relation.name}")
 '''
         else:
@@ -929,12 +933,7 @@ if outputDf.count() > 0:'''
         footer_code = f'''
 spark.sql("""REFRESH TABLE glue_catalog.{target_relation.schema}.{target_relation.name}""")
 '''
-        if session.credentials.glue_version == "4.0": # Clean up the table used for the workaround
-            footer_code += f'''spark.sql("DROP TABLE IF EXISTS tmp_{target_relation.name}")
-from awsglue.context import GlueContext
-GlueContext(spark.sparkContext).purge_s3_path("{session.credentials.location}/{target_relation.schema}/tmp_{target_relation.name}"'''
-            footer_code += ', {"retentionPeriod": 0})'
-        footer_code += f'''
+        footer_code += cleanup_code + f'''
 SqlWrapper2.execute("""SELECT * FROM glue_catalog.{target_relation.schema}.{target_relation.name} LIMIT 1""")
 '''
         code = head_code + core_code + footer_code
